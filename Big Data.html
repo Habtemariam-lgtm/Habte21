@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NYC Taxi Dashboard - Full Dataset (100k)</title>
+<script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
+<style>
+body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f172a; color: #e5e7eb; margin: 0; padding: 24px; }
+.container { max-width: 1600px; margin: auto; }
+.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+.header h1 { margin: 0; color: #f8fafc; }
+.card { background: #111827; border: 1px solid #1f2937; border-radius: 16px; padding: 18px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; margin-bottom: 18px; }
+.kpi { background: linear-gradient(145deg, #1f2937, #111827); padding: 20px; border-radius: 16px; border: 1px solid #334155; position: relative; }
+.kpi::before { content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: #3b82f6; }
+.kpi:nth-child(2)::before { background: #10b981; }
+.kpi:nth-child(3)::before { background: #f59e0b; }
+.kpi:nth-child(4)::before { background: #8b5cf6; }
+.kpi h3 { margin: 0; font-size: 13px; color: #94a3b8; text-transform: uppercase; }
+.kpi p { margin: 10px 0 0; font-size: 28px; font-weight: bold; color: #f8fafc; }
+.grid-top { display: grid; grid-template-columns: 2fr 1fr; gap: 18px; margin-bottom: 18px; }
+.grid-bottom { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-bottom: 18px; }
+</style>
+</head>
+<body>
+<div class='container'>
+    <div class='header'>
+        <div>
+            <h1>NYC Taxi Analytics Command Center</h1>
+            <p>Live Dashboard with 100,000 Data Points</p>
+        </div>
+    </div>
+
+    <div class='kpis'>
+        <div class='kpi'><h3>Total Trips</h3><p id='trips'>0</p></div>
+        <div class='kpi'><h3>Avg Fare</h3><p id='avgfare'>$0.00</p></div>
+        <div class='kpi'><h3>Max Fare</h3><p id='maxfare'>$0.00</p></div>
+        <div class='kpi'><h3>Avg Pass/Trip</h3><p id='avgpass'>0.0</p></div>
+    </div>
+
+    <div class='grid-top'>
+        <div class='card'><div id='map' style='height:450px'></div></div>
+        <div class='card'><div id='hourly' style='height:450px'></div></div>
+    </div>
+
+    <div class='grid-bottom'>
+        <div class='card'><div id='dow' style='height:380px'></div></div>
+        <div class='card'><div id='fare-dist' style='height:380px'></div></div>
+        <div class='card'><div id='pass-dist' style='height:380px'></div></div>
+    </div>
+    <div class='card'><div id='line' style='height:350px'></div></div>
+</div>
+
+<script>
+// Generate synthetic data for demonstration - Updated to 100,000 points
+function generateData(count) {
+    const data = [];
+    for (let i = 0; i < count; i++) {
+        const date = new Date(2020 + Math.floor(Math.random() * 4), Math.floor(Math.random() * 12), Math.floor(Math.random() * 28), Math.floor(Math.random() * 24));
+        data.push({
+            dt: date,
+            lat: 40.7 + (Math.random() * 0.2 - 0.1),
+            lon: -73.9 + (Math.random() * 0.2 - 0.1),
+            fare: 5 + (Math.random() * 45),
+            pass: Math.floor(Math.random() * 6) + 1
+        });
+    }
+    return data;
+}
+
+// Increased from 1,000 to 100,000
+const rawData = generateData(100000);
+
+const plotLayoutBase = {
+    paper_bgcolor: '#111827', plot_bgcolor: '#111827',
+    font: { color: '#94a3b8' }, margin: { t: 50, l: 40, r: 20, b: 40 },
+    xaxis: { gridcolor: '#1f2937' }, yaxis: { gridcolor: '#1f2937' }
+};
+
+function render() {
+    const data = rawData;
+    document.getElementById('trips').textContent = data.length.toLocaleString();
+    document.getElementById('avgfare').textContent = '$' + (data.reduce((a,b) => a + b.fare, 0) / data.length).toFixed(2);
+    document.getElementById('maxfare').textContent = '$' + Math.max(...data.map(d => d.fare)).toFixed(2);
+    document.getElementById('avgpass').textContent = (data.reduce((a,b) => a + b.pass, 0) / data.length).toFixed(1);
+
+    // Render Heatmap (Using WebGL for performance)
+    Plotly.newPlot('map', [{
+        type: 'densitymapbox', lat: data.map(d => d.lat), lon: data.map(d => d.lon),
+        z: data.map(d => d.fare), radius: 5, colorscale: 'Viridis'
+    }], {
+        ...plotLayoutBase, title: { text: 'Pickup Heatmap (100k points)' },
+        mapbox: { style: 'carto-darkmatter', center: { lat: 40.75, lon: -73.98 }, zoom: 10 }
+    });
+
+    const hrs = Array(24).fill(0);
+    data.forEach(d => hrs[d.dt.getHours()]++);
+    Plotly.newPlot('hourly', [{ x: hrs.map((_,i)=>i+":00"), y: hrs, type: 'bar', marker: {color:'#3b82f6'} }], 
+    { ...plotLayoutBase, title: {text:'Trips by Hour'} });
+
+    const dowNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const dows = Array(7).fill(0);
+    data.forEach(d => dows[d.dt.getDay()]++);
+    Plotly.newPlot('dow', [{ x: dowNames, y: dows, type: 'bar', marker: {color:'#8b5cf6'} }], 
+    { ...plotLayoutBase, title: {text:'Trips by Day'} });
+
+    Plotly.newPlot('fare-dist', [{ x: data.map(d => d.fare), type: 'histogram', marker: {color:'#10b981'} }], 
+    { ...plotLayoutBase, title: {text:'Fare Distribution'} });
+
+    const passGrp = {};
+    data.forEach(d => passGrp[d.pass] = (passGrp[d.pass] || 0) + 1);
+    Plotly.newPlot('pass-dist', [{ labels: Object.keys(passGrp), values: Object.values(passGrp), type: 'pie', hole: 0.4 }], 
+    { ...plotLayoutBase, title: {text:'Passenger Count'} });
+
+    const yrGrp = {};
+    data.forEach(d => { const y = d.dt.getFullYear(); yrGrp[y] = (yrGrp[y] || []); yrGrp[y].push(d.fare); });
+    const xs = Object.keys(yrGrp).sort();
+    const ys = xs.map(y => yrGrp[y].reduce((a,b) => a+b, 0) / yrGrp[y].length);
+    Plotly.newPlot('line', [{ x: xs, y: ys, type: 'scatter', mode: 'lines+markers', line: {color:'#f59e0b'} }], 
+    { ...plotLayoutBase, title: {text:'Avg Fare Trend'} });
+}
+
+render();
+</script>
+</body>
+</html>
